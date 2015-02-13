@@ -8,6 +8,7 @@ import time
 import sys
 
 GRAPHEMATIZER_PATH = os.path.normpath('../graphematizer')
+TERMINAL_WIDTH = 80
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('test_set', help='Test set to run.')
@@ -67,7 +68,11 @@ class Tester:
 
             os.remove(self._test_graphemes_path)
 
-            self._result = self._test_id, len(true_graphemes), lcs_len(true_graphemes, test_graphemes)
+            total = len(true_graphemes)
+            match = lcs_len([g[2:] for g in true_graphemes], [g[2:] for g in test_graphemes])
+            match_marked = lcs_len(true_graphemes, test_graphemes)
+
+            self._result = self._test_id, total, match, match_marked
 
         return self._result
 
@@ -111,20 +116,33 @@ def do_tests():
         else:
             time.sleep(sys.float_info.epsilon)
 
-total_count = 0
-match_count = 0
+
+def compute_scores(total, match, match_marked):
+    if total > 0:
+        return match / total, match_marked / total
+    else:
+        return 1.0, 1.0
+
+
+total = 0
+match = 0
+match_marked = 0
+
 print('bad tests (with score below {}):'.format(args.score_threshold))
-print('{:>11} - id'.format('score'))
-for i, (test_id, test_total_count, test_match_count) in enumerate(do_tests()):
-    test_score = test_match_count / test_total_count if test_total_count > 0 else 1.0
-    if test_score < args.score_threshold:
-        print('{:>10.3f}% - {}'.format(test_score * 100, '/'.join(test_id)), end=' ' * 20 + '\n')
+print(' {:>14} |  {:>14} | {}'.format('score', 'score marked', 'id'))
+for i, (i_id, i_total, i_match, i_match_marked) in enumerate(do_tests()):
+    i_score, i_score_marked = compute_scores(i_total, i_match, i_match_marked)
 
-    total_count += test_total_count
-    match_count += test_match_count
+    if i_score < args.score_threshold or i_score_marked < args.score_threshold:
+        text = '{:>14.3f}% | {:>14.3f}% | {}'.format(i_score * 100, i_score_marked * 100, '/'.join(i_id))
+        print(text, end=' ' * (TERMINAL_WIDTH - 1 - len(text)) + '\n')
 
-    score = match_count / total_count if total_count > 0 else 1.0
-    print('total {:.3f}% over {} tests'.format(score * 100, i), end=' ' * 20 + '\r')
+    total += i_total
+    match += i_match; match_marked += i_match_marked
+
+    score, score_marked = compute_scores(total, match, match_marked)
+    text = '{:>14.3f}% | {:>14.3f}% | <total over {} tests>'.format(score * 100, score_marked * 100, i)
+    print(text, end=' ' * (TERMINAL_WIDTH - 1 - len(text)) + '\r')
 
 print()
 print('Done.')
